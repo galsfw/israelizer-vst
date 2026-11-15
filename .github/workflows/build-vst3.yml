@@ -1,0 +1,36 @@
+name: Build VST3
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-vst3:
+    name: Windows (VST3)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (CMake + JUCE via FetchContent)
+        # Sem -G: usa o gerador Visual Studio disponível na imagem (x64).
+        run: cmake -B build -A x64
+
+      - name: Build (Release)
+        run: cmake --build build --config Release --parallel
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: SaturAir-Windows-VST3
+          path: build/SaturAir_artefacts/Release/VST3/
+          if-no-files-found: error
+
+  # Adicione depois, se quiser macOS/AU:
+  # macos:
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: cmake -B build
+  #     - run: cmake --build build --config Release --parallel
