@@ -1,9 +1,11 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <sound_meter/sound_meter.h>
 #include "PluginProcessor.h"
 
-class SaturAirAudioProcessorEditor : public juce::AudioProcessorEditor
+class SaturAirAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                     private juce::Timer
 {
 public:
     explicit SaturAirAudioProcessorEditor (SaturAirAudioProcessor&);
@@ -13,7 +15,10 @@ public:
     void resized() override;
 
 private:
-    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    void timerCallback() override;  // faz poll dos picos -> medidores
+
+    using SliderAttachment    = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ComboBoxAttachment  = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     void setupRotary (juce::Slider&, juce::Label&,
                       const juce::String& text, const juce::String& paramID);
@@ -25,9 +30,15 @@ private:
     juce::Slider highSlider, airSlider, outputSlider;
     juce::Slider lowMidSlider, midHighSlider;
 
+    juce::ComboBox shapeBox;
+    juce::Label shapeLabel;
+    std::unique_ptr<ComboBoxAttachment> shapeAttachment;
+
     juce::Label titleLabel;
     juce::Label highLabel, airLabel, outputLabel;
     juce::Label lowMidLabel, midHighLabel;
+
+    sd::SoundMeter::MetersComponent inMeters, outMeters;
 
     std::vector<std::unique_ptr<SliderAttachment>> attachments;
 

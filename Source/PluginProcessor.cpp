@@ -22,6 +22,7 @@ SaturAirAudioProcessor::SaturAirAudioProcessor()
     outputParam  = apvts.getRawParameterValue ("output");
     lowMidParam  = apvts.getRawParameterValue ("lowMidHz");
     midHighParam = apvts.getRawParameterValue ("midHighHz");
+    shapeParam   = apvts.getRawParameterValue ("shape");
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SaturAirAudioProcessor::createParameterLayout()
@@ -40,6 +41,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout SaturAirAudioProcessor::crea
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "air", 1 }, "Air", percentRange, 0.0f,
         Attributes().withLabel ("%")));
+
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { "shape", 1 }, "Shape",
+        juce::StringArray { "Tanh", "ArcTan", "Cubic", "Rational", "Valve", "Hard" }, 0));
 
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "output", 1 }, "Output", outputRange, 0.0f,
@@ -75,8 +80,10 @@ void SaturAirAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     // Um re-prepare nao deve reiniciar as rampas do zero: sincroniza o estado
     // suavizado com os valores atuais dos parametros (evita um "pulo" de
     // volume de 20 ms ao trocar sample rate/buffer no meio da sessao).
-    midSaturator.syncParameterValues (highParam->load() * 0.01f, midDrive);
-    airSaturator.syncParameterValues (airParam->load() * 0.01f, airDrive);
+    midSaturator.syncParameterValues (highParam->load() * 0.01f, midDrive,
+                                      (SaturationStage::Shape) ((int) shapeParam->load()));
+    airSaturator.syncParameterValues (airParam->load() * 0.01f, airDrive,
+                                      (SaturationStage::Shape) ((int) shapeParam->load()));
 
     const int latency = juce::jmax (midSaturator.getLatencyInSamples(),
                                     airSaturator.getLatencyInSamples());
@@ -121,15 +128,25 @@ void SaturAirAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     const int numChannels = juce::jmin (buffer.getNumChannels(), splitter.getNumChannels());
 
+    // Medidores: pico da ENTRADA, medido antes de o buffer ser reescrito.
+    const int measuredIn = juce::jmin (getTotalNumInputChannels(), buffer.getNumChannels());
+    for (int ch = 0; ch < 2; ++ch)
+        inputPeaks[ch].store (ch < measuredIn ? buffer.getMagnitude (ch, 0, n) : 0.0f,
+                              std::memory_order_relaxed);
+
     // Atualiza os parametros do bloco atual.
     splitter.setLowMidHz  ((double) lowMidParam->load());
     splitter.setMidHighHz ((double) midHighParam->load());
 
+    const auto shape = (SaturationStage::Shape) ((int) shapeParam->load());
+
     midSaturator.setDrive  (midDrive);
     midSaturator.setAmount (highParam->load() * 0.01f);
+    midSaturator.setShape  (shape);
 
     airSaturator.setDrive  (airDrive);
     airSaturator.setAmount (airParam->load() * 0.01f);
+    airSaturator.setShape  (shape);
 
     // Divide em bandas e satura so as de cima.
     splitter.split (buffer);
@@ -165,6 +182,11 @@ void SaturAirAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         if (n < numSamples)
             buffer.clear (ch, n, numSamples - n);
     }
+
+    // Medidores: pico da SAIDA (apos a soma das bandas e o ganho).
+    for (int ch = 0; ch < 2; ++ch)
+        outputPeaks[ch].store (ch < numChannels ? buffer.getMagnitude (ch, 0, n) : 0.0f,
+                               std::memory_order_relaxed);
 
     for (int ch = numChannels; ch < buffer.getNumChannels(); ++ch)
         buffer.clear (ch, 0, numSamples);

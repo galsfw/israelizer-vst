@@ -15,10 +15,22 @@ jobs:
 
       - name: Configure (CMake + JUCE via FetchContent)
         # Sem -G: usa o gerador Visual Studio disponível na imagem (x64).
-        run: cmake -B build -A x64
+        # -DSATURAIR_BUILD_TESTS=ON: compila a suíte Catch2 em Tests/.
+        run: cmake -B build -A x64 -DSATURAIR_BUILD_TESTS=ON
 
       - name: Build (Release)
         run: cmake --build build --config Release --parallel
+
+      - name: Testes unitários (ctest + Catch2)
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Validação pluginval (strictness 10)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip" -OutFile pluginval.zip
+          Expand-Archive -Path pluginval.zip -DestinationPath pluginval -Force
+          & "pluginval\pluginval.exe" --strictness-level 10 --verbose --validate "build\SaturAir_artefacts\Release\VST3\SaturAir.vst3"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload VST3
         uses: actions/upload-artifact@v4

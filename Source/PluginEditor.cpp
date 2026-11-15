@@ -17,9 +17,42 @@ SaturAirAudioProcessorEditor::SaturAirAudioProcessorEditor (SaturAirAudioProcess
     setupLinear (lowMidSlider,  lowMidLabel,  "Low/Mid Xover",  "lowMidHz");
     setupLinear (midHighSlider, midHighLabel, "Mid/High Xover", "midHighHz");
 
+    // Seletor de forma de onda (ComboBox ligado ao parametro "shape")
+    shapeLabel.setText ("Shape", juce::dontSendNotification);
+    shapeLabel.setJustificationType (juce::Justification::centredLeft);
+    shapeLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9c4d4));
+    addAndMakeVisible (shapeLabel);
+
+    shapeBox.setTextWhenNothingSelected ("Selecione...");
+    const char* shapeNames[] = { "Tanh", "ArcTan", "Cubic", "Rational", "Valve", "Hard" };
+    for (int i = 0; i < (int) (sizeof (shapeNames) / sizeof (shapeNames[0])); ++i)
+        shapeBox.addItem (shapeNames[i], i + 1);
+    addAndMakeVisible (shapeBox);
+
+    shapeAttachment = std::make_unique<ComboBoxAttachment> (processorRef.apvts, "shape", shapeBox);
+
+    // Medidores de entrada/saida (sound_meter)
+    for (auto* m : { &inMeters, &outMeters })
+    {
+        m->setChannelFormat (juce::AudioChannelSet::stereo());
+
+        sd::SoundMeter::Options meterOptions;
+        meterOptions.headerEnabled     = true;
+        meterOptions.valueEnabled      = false;  // coluna estreita: sem texto
+        meterOptions.faderEnabled      = false;
+        meterOptions.tickMarksEnabled  = true;
+        m->setOptions (meterOptions);
+
+        addAndMakeVisible (*m);
+    }
+    inMeters.setName ("IN");
+    outMeters.setName ("OUT");
+
+    startTimerHz (30);  // poll dos picos a 30 Hz
+
     setResizable (true, true);
-    setResizeLimits (440, 320, 1100, 700);
-    setSize (520, 320);
+    setResizeLimits (460, 350, 1100, 750);
+    setSize (560, 350);
 }
 
 void SaturAirAudioProcessorEditor::setupRotary (juce::Slider& slider, juce::Label& label,
@@ -55,6 +88,17 @@ void SaturAirAudioProcessorEditor::setupLinear (juce::Slider& slider, juce::Labe
                                                                paramID, slider));
 }
 
+void SaturAirAudioProcessorEditor::timerCallback()
+{
+    // Poll dos picos atomicos do processador (recomendado pelo sound_meter):
+    // o proprio medidor cuida do decay/repaint com o timer interno dele.
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        inMeters.setInputLevel  (ch, processorRef.getInputPeak (ch));
+        outMeters.setInputLevel (ch, processorRef.getOutputPeak (ch));
+    }
+}
+
 void SaturAirAudioProcessorEditor::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
@@ -73,6 +117,12 @@ void SaturAirAudioProcessorEditor::paint (juce::Graphics& g)
 void SaturAirAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced (16);
+
+    // Coluna dos medidores (lado direito, altura toda)
+    auto meterArea = area.removeFromRight (90);
+    auto inArea = meterArea.removeFromLeft (meterArea.getWidth() / 2);
+    inMeters.setBounds (inArea.reduced (1));
+    outMeters.setBounds (meterArea.reduced (1));
 
     titleLabel.setBounds (area.removeFromTop (28));
     area.removeFromTop (6);
@@ -101,4 +151,9 @@ void SaturAirAudioProcessorEditor::resized()
     placeLinear (lowMidSlider, lowMidLabel, area.removeFromTop (28));
     area.removeFromTop (6);
     placeLinear (midHighSlider, midHighLabel, area.removeFromTop (28));
+    area.removeFromTop (8);
+
+    auto shapeRow = area.removeFromTop (28);
+    shapeLabel.setBounds (shapeRow.removeFromLeft (130));
+    shapeBox.setBounds (shapeRow);
 }

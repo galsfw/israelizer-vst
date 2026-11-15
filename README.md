@@ -33,20 +33,24 @@ entrada ──┬────────────┤                        
 | `output`   | Output   | −24…+24 dB   | Ganho de saída (suavizado)                          |
 | `lowMidHz` | Low/Mid  | 100–16000 Hz | 1º crossover (default 2500 Hz)                     |
 | `midHighHz`| Mid/High | 100–16000 Hz | 2º crossover (default 8000 Hz)                     |
+| `shape`    | Shape    | 6 opções     | Forma de onda dos saturadores: Tanh, ArcTan, Cubic, Rational, Valve, Hard (troca com morph de 10 ms) |
 
 ## Estrutura
 
 ```
 SaturAir/
-├── CMakeLists.txt                  # FetchContent do JUCE (ou -DJUCE_PATH=...)
-├── .github/workflows/build-vst3.yml# CI: configura, compila e publica o VST3
+├── CMakeLists.txt                  # FetchContent do JUCE + módulo sound_meter
+├── .github/workflows/build-vst3.yml# CI: build + ctest + pluginval + artefato
+├── Tests/
+│   ├── CMakeLists.txt              # alvo SaturAirTests (Catch2, opcional)
+│   └── SaturAirTests.cpp           # testes do DSP (divisor, latência, formas)
 └── Source/
-    ├── PluginProcessor.h/.cpp      # APVTS, processBlock, estado/latência
-    ├── PluginEditor.h/.cpp         # 3 knobs + 2 crossovers (attachments)
+    ├── PluginProcessor.h/.cpp      # APVTS, processBlock, estado/latência, picos
+    ├── PluginEditor.h/.cpp         # knobs + crossovers + shape + medidores
     └── Dsp/
         ├── Biquad.h                # biquad RBJ (low-pass) -> LR4
         ├── BandSplitter.h          # entrada -> low / mid / high
-        ├── SaturationStage.h       # sobreamostrador + tanh aditivo
+        ├── SaturationStage.h       # sobreamostrador + 6 waveshapers
         └── SampleDelay.h           # compensação de latência da banda grave
 ```
 
@@ -69,15 +73,34 @@ Se já tiver o JUCE instalado: `cmake -B build -DJUCE_PATH="C:/JUCE"`.
 ### GitHub Actions
 
 O workflow `.github/workflows/build-vst3.yml` já está pronto: a cada push ele
-configura, compila em Release e publica o VST3 como *artifact*
+configura, compila em Release, roda os **testes unitários** (`ctest`), valida o
+plugin com **pluginval** (strictness 10) e publica o VST3 como *artifact*
 (`SaturAir-Windows-VST3`). Baixe na aba **Actions → Build VST3 → Artifacts**.
+
+Ao criar uma tag `v*` (`git tag v0.2.0 && git push origin v0.2.0`), um job
+extra publica uma **Release** com o zip do VST3 anexado.
+
+### Testes unitários
+
+```powershell
+cmake -B build -A x64 -DSATURAIR_BUILD_TESTS=ON
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+A suíte (`Tests/SaturAirTests.cpp`, Catch2) cobre as garantias centrais:
+complementaridade do divisor (`low + mid + high == entrada`), separação real
+das bandas, atraso exato do `SampleDelay`, latência reportada vs. atraso real
+do sobreamostrador, passthrough com `amount = 0` e as 6 formas de onda
+(ganho ~1 para sinais fracos, saída limitada, assimetria do Valve).
 
 ## Onde ajustar (os pontos de "gosto")
 
 - **Drive de cada banda**: `midDrive` / `airDrive` em `PluginProcessor.h`
   (padrão 6.0 e 4.0). Maior = mais harmônicos, mais agressivo.
-- **Fórmula da saturação**: `SaturationStage::process()` — troque `tanh` por
-  `x / (1 + |x|)`, polinômio de 3ª ordem, etc.
+- **Fórmula da saturação**: `SaturationStage::applyShape()` — as 6 formas já
+  estão lá (`tanh`, `arctan`, `cubic`, `rational`, `valve`, `hard`); adicionar
+  uma nova é um case no `switch` + uma entrada no ComboBox/`AudioParameterChoice`.
 - **Caráter do corte**: `Biquad::setLowPass()` (Q, ordem) em `BandSplitter.h`.
 - **Qualidade/fator do sobreamostrador**: 2º argumento do construtor de
   `juce::dsp::Oversampling` em `SaturationStage::prepare()` (2 = 4x, 3 = 8x).
@@ -86,7 +109,10 @@ configura, compila em Release e publica o VST3 como *artifact*
 
 ## TODOs (para sair do esqueleto)
 
-- Medidores de entrada/saída e botão de bypass por banda.
+- [x] Medidores de entrada/saída (sound_meter no editor, picos atômicos).
+- [x] Testes unitários (Catch2) e validação pluginval no CI.
+- [x] Formas de onda alternativas (parâmetro `Shape`: 6 waveshapers).
+- Bypass por banda (só a mid ou só a high).
 - Fator de sobreamostragem como parâmetro (1x/2x/4x/8x) — exige recriar o
   `Oversampling` fora do thread de áudio.
 - Modo paralelo/seco-úmido global e presets de fábrica.
@@ -94,6 +120,28 @@ configura, compila em Release e publica o VST3 como *artifact*
   fase do IIR meia-band perto de Nyquist na banda grave — hoje já é
   compensado no tempo, mas o atraso inteiro é a solução mais simples).
 - Presets e automação de crossovers com resposta visual no editor.
+
+## Referências (awesome-juce)
+
+Ideias levantadas na lista [sudara/awesome-juce](https://github.com/sudara/awesome-juce)
+que cabem neste plugin (ordem de interesse):
+
+- **[melatonin_test_helpers](https://github.com/sudara/melatonin_test_helpers)** —
+  matchers de `AudioBlock` para testar a propriedade `low + mid + high == entrada`
+  com menos boilerplate.
+- **[fontaudio](https://github.com/fefanto/fontaudio)** — ícones para a UI
+  (bypass, power) quando formos sair do esqueleto.
+- **[melatonin_blur](https://github.com/sudara/melatonin_blur)** — sombras/blur
+  rápidos para dar acabamento na UI escura.
+- **[sst-waveshapers](https://github.com/surge-synthesizer/sst-waveshapers)** (GPL-3,
+  compatível com a licença deste repo) — formas de onda do Surge, se as 6
+  atuais não bastarem.
+- **[chowdsp_utils](https://github.com/Chowdhury-DSP/chowdsp_utils)** — utilitários
+  (presets/json) quando formos implementar presets.
+- **[clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions)** —
+  gerar também o formato CLAP além do VST3.
+- **[pamplejuce](https://github.com/sudara/pamplejuce)** — referência de estrutura
+  de CI/testes (já seguimos o padrão dele: Catch2 + pluginval no Actions).
 
 ## Licença
 

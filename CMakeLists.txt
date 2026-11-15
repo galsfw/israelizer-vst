@@ -31,6 +31,27 @@ else()
     endif()
 endif()
 
+# ------------------------------------------------------------------
+# sound_meter - medidores de I/O (modulo JUCE externo, MIT)
+#
+# O repo nao traz CMakeLists, entao usamos FetchContent_Populate puro e
+# copiamos os fontes para uma pasta chamada "sound_meter": o juce_add_module
+# do JUCE exige que a pasta se chame igual ao modulo (<pasta>/<pasta>.h).
+# SHA pinado (o repo nao tem tags).
+# ------------------------------------------------------------------
+include(FetchContent)
+FetchContent_Declare(sound_meter
+    GIT_REPOSITORY https://github.com/SoundDevelopment/sound_meter.git
+    GIT_TAG        a614425d9ae3f6bcb9c94dc335e2f73ccfad211b)
+FetchContent_GetProperties(sound_meter)
+if(NOT sound_meter_POPULATED)
+    FetchContent_Populate(sound_meter)
+endif()
+
+set(SATURAIR_SOUND_METER_DIR "${CMAKE_CURRENT_BINARY_DIR}/sound_meter")
+file(COPY "${sound_meter_SOURCE_DIR}/" DESTINATION "${SATURAIR_SOUND_METER_DIR}")
+juce_add_module("${SATURAIR_SOUND_METER_DIR}")
+
 juce_add_plugin(SaturAir
     COMPANY_NAME                "CavalAudio"
     BUNDLE_ID                   "com.cavalaudio.saturair"
@@ -61,10 +82,22 @@ target_link_libraries(SaturAir
     PRIVATE
         juce::juce_audio_utils
         juce::juce_dsp
+        sound_meter
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# ------------------------------------------------------------------
+# Testes unitarios (Catch2) - opcionais; o CI ativa com
+#   cmake -B build -A x64 -DSATURAIR_BUILD_TESTS=ON
+# e roda com  ctest --test-dir build -C Release --output-on-failure
+# ------------------------------------------------------------------
+option(SATURAIR_BUILD_TESTS "Compilar os testes unitarios (Catch2)" OFF)
+if(SATURAIR_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(Tests)
+endif()
 
 # Fontes UTF-8 com acentos (nomes de UI em portugues): evita C4819 no MSVC.
 if(MSVC)

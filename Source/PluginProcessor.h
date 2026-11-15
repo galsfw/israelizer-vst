@@ -53,6 +53,18 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    // Picos por canal (0..1) para o editor desenhar os medidores.
+    // Atomicos: o editor faz poll pelo timer, sem trava e sem copia de buffer.
+    [[nodiscard]] float getInputPeak (int channel) const noexcept
+    {
+        return (channel >= 0 && channel < 2) ? inputPeaks[channel].load (std::memory_order_relaxed) : 0.0f;
+    }
+
+    [[nodiscard]] float getOutputPeak (int channel) const noexcept
+    {
+        return (channel >= 0 && channel < 2) ? outputPeaks[channel].load (std::memory_order_relaxed) : 0.0f;
+    }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -61,6 +73,10 @@ private:
     std::atomic<float>* outputParam  = nullptr;  // ganho de saida (dB)
     std::atomic<float>* lowMidParam  = nullptr;  // 1o crossover (Hz)
     std::atomic<float>* midHighParam = nullptr;  // 2o crossover (Hz)
+    std::atomic<float>* shapeParam   = nullptr;  // forma de onda (indice do choice)
+
+    std::atomic<float> inputPeaks[2]  {};
+    std::atomic<float> outputPeaks[2] {};
 
     // --- DSP ---
     BandSplitter   splitter;
