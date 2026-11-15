@@ -70,7 +70,7 @@ public:
     void reset()
     {
         for (auto* stage : { &lowMidStageA, &lowMidStageB, &midHighStageA, &midHighStageB })
-            for (auto& f : **stage)
+            for (auto& f : *stage)
                 f.reset();
     }
 
