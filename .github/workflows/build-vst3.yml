@@ -27,6 +27,35 @@ jobs:
           path: build/SaturAir_artefacts/Release/VST3/
           if-no-files-found: error
 
+  # Publica uma Release automaticamente quando o push e uma tag v*.
+  # Uso:  git tag v0.2.0 && git push origin v0.2.0
+  release:
+    name: Publica Release
+    needs: windows-vst3
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write   # libera o GITHUB_TOKEN para criar release + anexar asset
+    steps:
+      - name: Baixa o artifact (build ja pronto, sem recompilar)
+        uses: actions/download-artifact@v4
+        with:
+          name: SaturAir-Windows-VST3
+          path: release-tmp
+
+      - name: Zipa so o bundle (exclui .exp/.lib)
+        shell: pwsh
+        run: Compress-Archive -Path "release-tmp\SaturAir.vst3" -DestinationPath "SaturAir-VST3-win64.zip" -Force
+
+      - name: Cria a Release com o zip anexado
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" "SaturAir-VST3-win64.zip" `
+            --title "SaturAir $env:GITHUB_REF_NAME" `
+            --notes "Build Windows x64 (VST3) - CI: GitHub Actions / MSVC Release. Extraia e copie a pasta ``SaturAir.vst3`` para ``C:\Program Files\Common Files\VST3``."
+
   # Adicione depois, se quiser macOS/AU:
   # macos:
   #   runs-on: macos-latest
