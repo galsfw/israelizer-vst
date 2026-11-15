@@ -60,6 +60,15 @@ public:
         drive.setTargetValue (juce::jmax (1.0f, newDrive));
     }
 
+    // Sincroniza o estado suavizado (current + target) com os valores atuais
+    // dos parametros. Chamado logo apos prepare(): sem isso, um re-prepare
+    // reiniciaria as rampas no zero e causaria um "pulo" de 20 ms no volume.
+    void syncParameterValues (float newAmount, float newDrive) noexcept
+    {
+        amount.setCurrentAndTargetValue (juce::jlimit (0.0f, 1.0f, newAmount));
+        drive.setCurrentAndTargetValue  (juce::jmax (1.0f, newDrive));
+    }
+
     [[nodiscard]] int getLatencyInSamples() const noexcept
     {
         return oversampling != nullptr ? (int) std::ceil (oversampling->getLatencyInSamples()) : 0;

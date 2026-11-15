@@ -31,7 +31,6 @@ public:
         maxBlockSize  = juce::jmax (1, maximumBlockSize);
 
         lowBand.       setSize (numChannels, maxBlockSize);
-        midHighScratch.setSize (numChannels, maxBlockSize);
         midBand.       setSize (numChannels, maxBlockSize);
         highBand.      setSize (numChannels, maxBlockSize);
 
@@ -86,7 +85,6 @@ public:
         {
             const float* src  = input.getReadPointer (ch);
             float*       low  = lowBand.getWritePointer (ch);
-            float*       scr  = midHighScratch.getWritePointer (ch);
             float*       mid  = midBand.getWritePointer (ch);
             float*       high = highBand.getWritePointer (ch);
 
@@ -99,10 +97,10 @@ public:
             {
                 const float x = src[i];
 
-                low[i]  = lp1b.processSample (lp1a.processSample (x));
-                scr[i]  = x - low[i];
-                mid[i]  = lp2b.processSample (lp2a.processSample (scr[i]));
-                high[i] = scr[i] - mid[i];
+                low[i]        = lp1b.processSample (lp1a.processSample (x));
+                const float rest = x - low[i];   // = x - low (sem buffer extra)
+                mid[i]        = lp2b.processSample (lp2a.processSample (rest));
+                high[i]       = rest - mid[i];
             }
         }
 
@@ -146,7 +144,7 @@ private:
     double lowMidHz     = defaultLowMidHz;
     double midHighHz    = defaultMidHighHz;
 
-    juce::AudioBuffer<float> lowBand, midHighScratch, midBand, highBand;
+    juce::AudioBuffer<float> lowBand, midBand, highBand;
 
     std::vector<Biquad> lowMidStageA, lowMidStageB;
     std::vector<Biquad> midHighStageA, midHighStageB;

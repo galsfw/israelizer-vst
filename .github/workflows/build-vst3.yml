@@ -11,7 +11,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure (CMake + JUCE via FetchContent)
         # Sem -G: usa o gerador Visual Studio disponível na imagem (x64).
@@ -31,6 +31,6 @@ jobs:
   # macos:
   #   runs-on: macos-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #     - run: cmake -B build
   #     - run: cmake --build build --config Release --parallel

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
+#include <vector>
 #include "Dsp/BandSplitter.h"
 #include "Dsp/SampleDelay.h"
 #include "Dsp/SaturationStage.h"
@@ -67,6 +69,7 @@ private:
     SampleDelay    dryDelay;       // compensa a latencia da banda grave
 
     juce::SmoothedValue<float> outputGain { 1.0f };
+    std::vector<float> outputScratch;  // rampa de saida pre-computada por bloco
 
     // Caracteristica de cada banda - ajustar ao gosto.
     static constexpr float midDrive = 6.0f;

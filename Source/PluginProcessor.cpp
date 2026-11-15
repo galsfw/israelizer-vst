@@ -47,12 +47,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout SaturAirAudioProcessor::crea
 
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "lowMidHz", 1 }, "Low/Mid Xover",
-        frequencyRange (4000.0f), (float) BandSplitter::defaultLowMidHz,
+        frequencyRange ((float) BandSplitter::defaultLowMidHz), (float) BandSplitter::defaultLowMidHz,
         Attributes().withLabel ("Hz")));
 
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "midHighHz", 1 }, "Mid/High Xover",
-        frequencyRange (9000.0f), (float) BandSplitter::defaultMidHighHz,
+        frequencyRange ((float) BandSplitter::defaultMidHighHz), (float) BandSplitter::defaultMidHighHz,
         Attributes().withLabel ("Hz")));
 
     return layout;
@@ -71,6 +71,12 @@ void SaturAirAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
     midSaturator.prepare (spec);
     airSaturator.prepare (spec);
+
+    // Um re-prepare nao deve reiniciar as rampas do zero: sincroniza o estado
+    // suavizado com os valores atuais dos parametros (evita um "pulo" de
+    // volume de 20 ms ao trocar sample rate/buffer no meio da sessao).
+    midSaturator.syncParameterValues (highParam->load() * 0.01f, midDrive);
+    airSaturator.syncParameterValues (airParam->load() * 0.01f, airDrive);
 
     const int latency = juce::jmax (midSaturator.getLatencyInSamples(),
                                     airSaturator.getLatencyInSamples());
@@ -132,6 +138,16 @@ void SaturAirAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     outputGain.setTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
 
+    // Pre-computa a rampa de saida UMA vez por bloco. Consumir getNextValue()
+    // dentro do loop de canais faria a rampa avancar por canal: L e R
+    // receberiam ganhos diferentes durante a automacao (e a rampa correria
+    // em velocidade x numero de canais).
+    if ((int) outputScratch.size() < n)
+        outputScratch.resize ((size_t) n, 0.0f);
+
+    for (int i = 0; i < n; ++i)
+        outputScratch[(size_t) i] = outputGain.getNextValue();
+
     // Soma as bandas (grave atrasada = compensacao de latencia) e aplica o ganho.
     for (int ch = 0; ch < numChannels; ++ch)
     {
@@ -143,7 +159,7 @@ void SaturAirAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         for (int i = 0; i < n; ++i)
         {
             const float lowDelayed = dryDelay.processSample (ch, low[i]);
-            out[i] = (lowDelayed + mid[i] + high[i]) * outputGain.getNextValue();
+            out[i] = (lowDelayed + mid[i] + high[i]) * outputScratch[(size_t) i];
         }
 
         if (n < numSamples)
