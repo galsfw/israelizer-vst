@@ -65,6 +65,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$env:GITHUB_REF_NAME" "SaturAir-VST3-win64.zip" `
+            --repo "$env:GITHUB_REPOSITORY" `
             --title "SaturAir $env:GITHUB_REF_NAME" `
             --notes "Build Windows x64 (VST3) - CI: GitHub Actions / MSVC Release. Extraia e copie a pasta ``SaturAir.vst3`` para ``C:\Program Files\Common Files\VST3``."
 
