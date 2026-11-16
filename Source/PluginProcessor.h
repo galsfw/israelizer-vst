@@ -74,6 +74,7 @@ private:
     std::atomic<float>* lowMidParam  = nullptr;  // 1o crossover (Hz)
     std::atomic<float>* midHighParam = nullptr;  // 2o crossover (Hz)
     std::atomic<float>* shapeParam   = nullptr;  // forma de onda (indice do choice)
+    std::atomic<float>* powerParam   = nullptr;  // POWER (0 = saturadores desligados)
 
     std::atomic<float> inputPeaks[2]  {};
     std::atomic<float> outputPeaks[2] {};

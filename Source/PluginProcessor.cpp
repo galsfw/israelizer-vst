@@ -23,6 +23,7 @@ SaturAirAudioProcessor::SaturAirAudioProcessor()
     lowMidParam  = apvts.getRawParameterValue ("lowMidHz");
     midHighParam = apvts.getRawParameterValue ("midHighHz");
     shapeParam   = apvts.getRawParameterValue ("shape");
+    powerParam   = apvts.getRawParameterValue ("power");
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SaturAirAudioProcessor::createParameterLayout()
@@ -45,6 +46,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout SaturAirAudioProcessor::crea
     layout.add (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID { "shape", 1 }, "Shape",
         juce::StringArray { "Tanh", "ArcTan", "Cubic", "Rational", "Valve", "Hard" }, 0));
+
+    layout.add (std::make_unique<juce::AudioParameterBool> (
+        juce::ParameterID { "power", 1 }, "Power", true));
 
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "output", 1 }, "Output", outputRange, 0.0f,
@@ -140,12 +144,16 @@ void SaturAirAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     const auto shape = (SaturationStage::Shape) ((int) shapeParam->load());
 
+    // POWER: quando desligado, os saturadores nao adicionam nada (a soma das
+    // bandas continua exata, entao o sinal passa intacto e com a mesma latencia).
+    const float powerMix = powerParam->load() > 0.5f ? 1.0f : 0.0f;
+
     midSaturator.setDrive  (midDrive);
-    midSaturator.setAmount (highParam->load() * 0.01f);
+    midSaturator.setAmount (highParam->load() * 0.01f * powerMix);
     midSaturator.setShape  (shape);
 
     airSaturator.setDrive  (airDrive);
-    airSaturator.setAmount (airParam->load() * 0.01f);
+    airSaturator.setAmount (airParam->load() * 0.01f * powerMix);
     airSaturator.setShape  (shape);
 
     // Divide em bandas e satura so as de cima.
