@@ -422,8 +422,8 @@ void SaturAirAudioProcessorEditor::paint (juce::Graphics& g)
 
             g.setColour (col);
             g.strokePath (seg, juce::PathStrokeType (3.0f,
-                             juce::PathStrokeType::butt,
-                             juce::PathStrokeType::rounded));
+                             juce::PathStrokeType::mitered,
+                             juce::PathStrokeType::butt));
         }
 
         // rotulos da escala (inclinados como na referencia)
@@ -435,7 +435,6 @@ void SaturAirAudioProcessorEditor::paint (juce::Graphics& g)
             const float ly = centre.y + std::sin (a) * (radius - 16.0f);
 
             juce::Graphics::ScopedSaveState save (g);
-            g.translate (lx, ly);
 
             // rotacao tangencial ao arco, normalizada para o texto nunca
             // ficar de cabeca para baixo (lado direito do arco)
@@ -445,7 +444,8 @@ void SaturAirAudioProcessorEditor::paint (juce::Graphics& g)
             if      (rot >  juce::MathConstants<float>::halfPi) rot -= juce::MathConstants<float>::pi;
             else if (rot < -juce::MathConstants<float>::halfPi) rot += juce::MathConstants<float>::pi;
 
-            g.rotate (rot);
+            // Graphics nao tem translate/rotate: rotaciona em torno de (lx, ly)
+            g.addTransform (juce::AffineTransform::rotation (rot, lx, ly));
             g.setColour (juce::Colour (0xff7d8b99));
             g.drawText (tk.label, -12, -6, 24, 12, juce::Justification::centred, false);
         }
